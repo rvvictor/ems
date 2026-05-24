@@ -1,131 +1,394 @@
-"use client"
+"use client";
 
-import { useRef, useState } from "react"
-import Link from "next/dist/client/link"
+import { useRef, useState } from "react";
+import Link from "next/link";
+import { CopilotChat } from "@copilotkit/react-ui";
+import "@copilotkit/react-ui/styles.css";
+import {
+  TreePine,
+  ClipboardList,
+  FileSpreadsheet,
+  FileText,
+  Users,
+  ArrowRight,
+  Shield,
+  BarChart3,
+  ScrollText,
+  ChevronDown,
+} from "lucide-react";
 
-export default function Page() {
-  const [output, setOutput] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string>("Listo para probar el stream")
-  const controllerRef = useRef<AbortController | null>(null)
+const NAV_ITEMS = [
+  { href: "#chat", label: "Chat" },
+  { href: "#funciones", label: "Funciones" },
+  { href: "#modelo", label: "Modelo" },
+];
 
-  const handleRunStream = async () => {
-    setError(null)
-    setOutput("")
-    setStatus("Iniciando petición...")
-    setLoading(true)
+const FORMATS = [
+  {
+    icon: ClipboardList,
+    title: "Plan de Acción",
+    description:
+      "Plan operativo con niveles de urgencia, responsables, fechas límite y costos estimados para cada acción correctiva.",
+    preview: ["Urgencia: crítica, alta, media, baja", "Responsables asignados", "Costos estimados"],
+  },
+  {
+    icon: FileSpreadsheet,
+    title: "Informe NOM-001",
+    description:
+      "Tabla de cumplimiento normativo con parámetros vs límites, conclusión legal y referencias, listo para autoridades.",
+    preview: ["Parámetros vs límites", "Conclusión legal", "Formato apto para PDF"],
+  },
+  {
+    icon: FileText,
+    title: "Ficha Pública",
+    description:
+      "Resumen en lenguaje no técnico para visitantes, con titular, aspectos destacados y etiqueta de seguridad.",
+    preview: ["Listo para QR", "Aspectos destacados", "Etiqueta de seguridad"],
+  },
+  {
+    icon: Users,
+    title: "Directorio de Aliados",
+    description:
+      "Red de ONGs, fondos y socios de tratamiento organizados por tipo de problema ambiental.",
+    preview: ["Socios locales", "Contactos de financiamiento", "Información de contacto"],
+  },
+];
 
-    try {
-      const controller = new AbortController()
-      controllerRef.current = controller
+const FOOTER_SECTIONS = [
+  {
+    title: "Producto",
+    links: [
+      { label: "Inicio", href: "/" },
+      { label: "Chat IA", href: "#chat" },
+      { label: "Funciones", href: "#funciones" },
+      { label: "Modelo", href: "#modelo" },
+    ],
+  },
+  {
+    title: "Formatos",
+    links: [
+      { label: "Plan de Acción", href: "/expediente" },
+      { label: "Informe NOM-001", href: "/expediente" },
+      { label: "Ficha Pública", href: "/expediente" },
+      { label: "Directorio de Aliados", href: "/expediente" },
+    ],
+  },
+  {
+    title: "Tecnología",
+    links: [
+      { label: "Azure AI Foundry", href: "#modelo" },
+      { label: "Next.js", href: "https://nextjs.org" },
+      { label: "CopilotKit", href: "https://copilotkit.ai" },
+      { label: "Python FastAPI", href: "https://fastapi.tiangolo.com" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Privacidad", href: "#" },
+      { label: "Términos", href: "#" },
+      { label: "Contacto", href: "#" },
+    ],
+  },
+];
 
-      const payload = {
-        "usuario_prompt": "Quiero saber que parametros son mas urgentes de atender.",
-        "datos_zona": {
-          "nombre_cenote": "Cenote Azul",
-          "fecha_medicion": "2004-05 a 2005-04",
-          "temporada": "anual",
-          "profundidad_muestra_m": "0-65",
-          "pH": 7.8,
-          "temperatura_C": 29.2,
-          "oxigeno_disuelto_mgL": 6.1,
-          "DQO_mgL": null,
-          "SST_mgL": null,
-          "nitrogeno_total_mgL": null,
-          "fosforo_total_mgL": null,
-          "grasas_aceites_mgL": null,
-          "E_coli_NMP_100mL": null,
-          "enterococos_fecales_NMP_100mL": null,
-          "clorofila_a_mgm3": 0.9,
-          "visibilidad_secchi_m": 11.1,
-          "oxibenzona_ugL": 1.2,
-          "octinoxato_ugL": 0.9,
-          "turistas_por_dia": 10,
-          "uso_bloqueadores_ecologicos_pct": 12,
-          "gestion_residuos_pct": 60,
-          "educacion_ambiental_score": 1,
-          "cumplimiento_normativo_score": 2,
-          "participacion_comunitaria": false
-        }
-      }
-
-      const response = await fetch("http://localhost:8000/datos-zona-stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Error ${response.status}: ${text}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error("El navegador no puede leer la respuesta en streaming.")
-      }
-
-      const decoder = new TextDecoder()
-      setStatus("Recibiendo stream...")
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          break
-        }
-
-        const chunk = decoder.decode(value, { stream: true })
-        setOutput((prev) => prev + chunk)
-      }
-
-      setStatus("Stream completado")
-    } catch (err) {
-      if ((err as any)?.name === "AbortError") {
-        setStatus("Stream cancelado")
-      } else {
-        setError((err as Error).message)
-        setStatus("Error en la petición")
-      }
-    } finally {
-      setLoading(false)
-      controllerRef.current = null
-    }
-  }
-
-  const handleCancel = () => {
-    controllerRef.current?.abort()
-  }
+function Navbar() {
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <main style={{ padding: "24px", fontFamily: "system-ui, sans-serif" }}>
-      <h1>Prueba de Stream</h1>
-      <p>{status}</p>
+    <nav className="sticky top-0 z-50 bg-dark text-cream">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link href="/" className="flex items-center gap-3 text-lg font-semibold tracking-tight">
+          <img src="/logo.jpeg" alt="EMS" className="h-8 w-8 rounded-lg object-cover" />
+          EMS
+        </Link>
 
-      <div style={{ marginBottom: "16px" }}>
-        <button onClick={handleRunStream} disabled={loading} style={{ marginRight: "8px" }}>
-          {loading ? "Ejecutando..." : "Probar /datos-zona-stream"}
+        <button
+          className="flex md:hidden"
+          onClick={() => setMenuOpen((prev) => !prev)}
+          aria-label="Toggle menu"
+        >
+          <ChevronDown size={20} className={`transition ${menuOpen ? "rotate-180" : ""}`} />
         </button>
-        <button onClick={handleCancel} disabled={!loading}>
-          Cancelar
-        </button>
-      </div>
 
-      <div style={{ marginBottom: "16px" }}>
-        <strong>Salida incremental:</strong>
-        <pre style={{ whiteSpace: "pre-wrap", background: "#f5f5f5", padding: "16px", minHeight: "180px", borderRadius: "8px" }}>
-          {output || "Aquí aparecerán los chunks de texto conforme lleguen."}
-        </pre>
-      </div>
-
-      {error ? (
-        <div style={{ color: "red", marginBottom: "16px" }}>
-          <strong>Error:</strong> {error}
+        <div className="hidden items-center gap-8 md:flex">
+          {NAV_ITEMS.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="text-sm text-cream/70 transition hover:text-cream"
+            >
+              {item.label}
+            </a>
+          ))}
+          <Link
+            href="/home"
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-cream transition hover:bg-primary/80"
+          >
+            Comenzar
+          </Link>
         </div>
-      ) : null}
+      </div>
 
-      <Link href="/home">Ir a Home</Link>
-    </main>
-  )
+      {menuOpen && (
+        <div className="border-t border-cream/10 px-6 pb-4 pt-2 md:hidden">
+          <div className="flex flex-col gap-3">
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setMenuOpen(false)}
+                className="text-sm text-cream/70 transition hover:text-cream"
+              >
+                {item.label}
+              </a>
+            ))}
+            <Link
+              href="/home"
+              onClick={() => setMenuOpen(false)}
+              className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-cream"
+            >
+              Comenzar <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+}
+
+function HeroSection() {
+  return (
+    <section className="bg-cream px-6 py-20 md:py-28">
+      <div className="mx-auto max-w-4xl text-center">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-primary">
+          Environmental Monitoring System
+        </div>
+        <h1 className="text-4xl font-bold leading-tight text-dark md:text-5xl lg:text-6xl">
+          Transforma datos de cenotes en{" "}
+          <span className="text-primary">expedientes ambientales</span> completos
+        </h1>
+        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-dark/60 md:text-lg">
+          EMS utiliza inteligencia artificial para convertir mediciones de calidad de agua,
+          afluencia turística y gestión de residuos en cuatro formatos de reporte listos para usar:
+          planes de acción, informes de cumplimiento NOM-001, fichas públicas y directorios de aliados.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <a
+            href="#chat"
+            className="inline-flex items-center gap-2 rounded-full bg-dark px-6 py-3 text-sm font-medium text-cream transition hover:bg-dark/85"
+          >
+            Probar el Chat <ArrowRight size={16} />
+          </a>
+          <Link
+            href="/expediente"
+            className="inline-flex items-center gap-2 rounded-full border border-dark/20 bg-white px-6 py-3 text-sm font-medium text-dark transition hover:border-dark/40"
+          >
+            Ver Dossier
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChatSection() {
+  const acceptedFileTypes =
+    ".pdf,.xlsx,.xls,.csv,.json,.xml,.md,text/markdown,application/xml,text/xml,image/*";
+
+  return (
+    <section id="chat" className="scroll-mt-20 bg-surface px-6 py-20">
+      <div className="mx-auto max-w-2xl">
+        <div className="mb-8 text-center">
+          <h2 className="text-2xl font-bold text-dark md:text-3xl">
+            Prueba el asistente
+          </h2>
+          <p className="mt-3 text-dark/60">
+            Describe la situación de tu cenote y adjunta archivos. El asistente
+            preparará los datos al instante.
+          </p>
+        </div>
+
+        <div className="input-only-chat">
+          <CopilotChat
+            instructions={`Eres un experto en impacto ambiental especializado en cenotes.
+Normaliza los datos del usuario al esquema test.json.
+No hagas preguntas, no muestres JSON ni resúmenes en el chat.
+Cuando los datos estén listos, llama a registerIntake con usuario_prompt y datos_zona.`}
+            labels={{
+              title: "Asistente Ambiental",
+              initial:
+                "Describe la situación del cenote y adjunta los archivos de medición.",
+              placeholder: "Describe la situación del cenote...",
+            }}
+            attachments={{
+              enabled: true,
+              accept: acceptedFileTypes,
+              maxSize: 20 * 1024 * 1024,
+            }}
+          />
+        </div>
+
+        <p className="mt-4 text-center text-xs text-dark/40">
+          Los datos se guardan localmente en tu sesión.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function FeaturesSection() {
+  return (
+    <section id="funciones" className="scroll-mt-20 bg-cream px-6 py-20">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-14 text-center">
+          <h2 className="text-2xl font-bold text-dark md:text-3xl">
+            4 formas de visualizar la información
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-dark/60">
+            Cada formato transforma los mismos datos de entrada en una perspectiva diferente,
+            adaptada a distintos públicos y propósitos.
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          {FORMATS.map((format) => {
+            const Icon = format.icon;
+            return (
+              <div
+                key={format.title}
+                className="group rounded-2xl border border-secondary/40 bg-surface p-6 transition hover:border-primary/40 hover:shadow-sm"
+              >
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-dark/5 text-primary">
+                  <Icon size={20} />
+                </div>
+                <h3 className="text-lg font-semibold text-dark">{format.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-dark/60">{format.description}</p>
+                <ul className="mt-4 space-y-1.5 text-xs text-dark/50">
+                  {format.preview.map((line) => (
+                    <li key={line} className="flex items-center gap-2">
+                      <span className="h-1 w-1 rounded-full bg-primary" />
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-12 text-center">
+          <Link
+            href="/expediente"
+            className="inline-flex items-center gap-2 rounded-full bg-dark px-6 py-3 text-sm font-medium text-cream transition hover:bg-dark/85"
+          >
+            Ir al Dossier <ArrowRight size={16} />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ModelSection() {
+  return (
+    <section id="modelo" className="scroll-mt-20 bg-primary px-6 py-20">
+      <div className="mx-auto max-w-6xl">
+        <div className="grid items-center gap-12 md:grid-cols-2">
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-dark/15 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-cream/80">
+              Azure AI Foundry
+            </div>
+            <h2 className="text-2xl font-bold text-cream md:text-3xl">
+              Impulsado por inteligencia artificial de Microsoft Azure
+            </h2>
+            <p className="mt-4 leading-relaxed text-cream/80">
+              Cada expediente es generado por un agente de IA alojado en{" "}
+              <strong>Azure AI Foundry</strong>. El modelo recibe los datos normalizados del cenote
+              y genera JSON estructurado siguiendo esquemas predefinidos para cada formato de
+              reporte.
+            </p>
+            <ul className="mt-6 space-y-3">
+              {[
+                { icon: Shield, text: "Datos procesados en infraestructura empresarial Azure" },
+                { icon: BarChart3, text: "Esquemas JSON tipados para cada formato de salida" },
+                { icon: ScrollText, text: "Normalización automática con valores por defecto" },
+              ].map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-start gap-3 text-sm text-cream/80">
+                  <Icon size={16} className="mt-0.5 shrink-0 text-cream/60" />
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-cream/15 bg-dark/10 p-6">
+            <div className="mb-3 flex items-center gap-2 text-xs text-cream/50">
+              <div className="h-2 w-2 rounded-full bg-green-400" />
+              Sistema activo
+            </div>
+            <div className="space-y-2 text-xs leading-relaxed text-cream/70">
+              <p className="font-mono">POST /datos-zona {"{"}</p>
+              <p className="font-mono pl-4">&quot;usuario_prompt&quot;: &quot;...&quot;,</p>
+              <p className="font-mono pl-4">&quot;datos_zona&quot;: {"{ ... }"},</p>
+              <p className="font-mono pl-4">&quot;ui_type&quot;: &quot;action_plan&quot;</p>
+              <p className="font-mono">{"}"}</p>
+              <p className="pt-2 text-cream/50">→ Agente Azure AI → JSON estructurado</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FooterSection() {
+  return (
+    <footer className="bg-dark text-cream/60">
+      <div className="mx-auto max-w-6xl px-6 py-16">
+        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
+          {FOOTER_SECTIONS.map((section) => (
+            <div key={section.title}>
+              <h4 className="mb-4 text-sm font-semibold text-cream">{section.title}</h4>
+              <ul className="space-y-2.5">
+                {section.links.map((link) => (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      className="text-sm transition hover:text-cream/80"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-cream/10 px-6 py-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-xs md:flex-row">
+          <div className="flex items-center gap-2">
+            <img src="/logo.jpeg" alt="EMS" className="h-5 w-5 rounded object-cover" />
+            <span className="font-medium text-cream/80">EMS</span>
+          </div>
+          <p>&copy; {new Date().getFullYear()} EMS. Todos los derechos reservados.</p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen bg-cream text-dark">
+      <Navbar />
+      <HeroSection />
+      <ChatSection />
+      <FeaturesSection />
+      <ModelSection />
+      <FooterSection />
+    </div>
+  );
 }
