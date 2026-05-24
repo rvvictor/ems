@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { CopilotKit } from "@copilotkit/react-core";
-
-const inter = Inter({ subsets: ["latin"] });
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Sistema de Gestión Ambiental",
@@ -12,11 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={inter.className}>
-        <CopilotKit runtimeUrl="/api/copilotkit">
-          {children}
-        </CopilotKit>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
