@@ -1,0 +1,5 @@
+fastapi
+python-dotenv
+azure-identity
+azure-ai-projects
+uvicorn
