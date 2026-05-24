@@ -9,14 +9,10 @@ export const metadata: Metadata = {
   description: "Monitoreo y gestión de indicadores ambientales con IA",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function HomeLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <body className={inter.className}>
-        <CopilotKit runtimeUrl="/api/copilotkit">
-          {children}
-        </CopilotKit>
-      </body>
-    </html>
+    <div>
+      <CopilotKit runtimeUrl="/api/copilotkit">{children}</CopilotKit>
+    </div>
   );
 }
