@@ -111,7 +111,7 @@ export default function Home() {
       setIntakeError(null);
       const payload: FoundryIntakePayload = {
         usuario_prompt,
-        datos_zona,
+        datos_zona: datos_zona as Record<string, unknown>,
       };
       setIntake(payload);
       saveIntakePayload(payload);

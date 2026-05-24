@@ -5,7 +5,7 @@ import {
 } from "@copilotkit/runtime";
 
 const serviceAdapter = new GoogleGenerativeAIAdapter({
-  apiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   model: "gemini-2.5-flash",
   apiVersion: "v1",
 });

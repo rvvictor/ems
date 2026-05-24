@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import Sidebar from "@/components/ui/Sidebar";
@@ -55,6 +55,14 @@ const formatLabel: Record<FoundryUiType, string> = {
 };
 
 export default function ExpedientePage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">Loading dossier...</div>}>
+      <ExpedienteContent />
+    </Suspense>
+  );
+}
+
+function ExpedienteContent() {
   const searchParams = useSearchParams();
   const [session, setSession] = useState<FoundrySession>(() => loadFoundrySession());
   const [activeTab, setActiveTab] = useState<FoundryUiType | null>(null);

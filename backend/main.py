@@ -74,17 +74,17 @@ def build_prompt(
         formatted_value = format_field_value(value)
         datos_list.append(f"- {field_name}: {formatted_value}")
 
-        datos_text = "\n".join(datos_list)
-        usuario_prompt = usuario_prompt or ""
-        context = context or {}
-        context_text = "\n".join(
-                f"- {normalize_field_name(key)}: {format_field_value(value)}"
-                for key, value in context.items()
-        )
-        previous_outputs = previous_outputs or []
-        previous_text = json.dumps(previous_outputs, ensure_ascii=False, indent=2)
+    datos_text = "\n".join(datos_list)
+    usuario_prompt = usuario_prompt or ""
+    context = context or {}
+    context_text = "\n".join(
+        f"- {normalize_field_name(key)}: {format_field_value(value)}"
+        for key, value in context.items()
+    )
+    previous_outputs = previous_outputs or []
+    previous_text = json.dumps(previous_outputs, ensure_ascii=False, indent=2)
 
-        return f"""
+    return f"""
 Return ONLY a valid JSON object. Do not use Markdown or extra text.
 The JSON must follow the schema for ui_type "{ui_type}".
 
