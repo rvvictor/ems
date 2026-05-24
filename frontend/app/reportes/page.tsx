@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function DashboardRoute() {
+export default function ReportesPage() {
   redirect("/expediente");
 }
