@@ -2,15 +2,17 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import Sidebar from "@/components/ui/Sidebar";
+import { useRouter, useSearchParams } from "next/navigation";
 import { requestFoundryOutput } from "@/lib/foundry-client";
 import {
-  loadFoundrySession,
-  saveFoundryOutput,
+  getDossier,
+  getAllDossiers,
+  updateDossierOutput,
+  deleteDossier,
+  renameDossier,
 } from "@/lib/foundry-store";
 import type {
-  FoundrySession,
+  Dossier,
   FoundryUiPayload,
   FoundryUiType,
 } from "@/lib/types/foundry";
@@ -22,60 +24,73 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowRight,
+  Plus,
+  Trash2,
+  Edit3,
+  Check,
+  X,
+  AlertTriangle,
+  Circle,
+  TrendingDown,
+  Gauge,
+  Skull,
+  ChevronRight,
+  ExternalLink,
+  Info,
 } from "lucide-react";
 
-const formats: Array<{
+const formatos: Array<{
   id: FoundryUiType;
-  title: string;
-  description: string;
+  titulo: string;
+  descripcion: string;
   preview: string[];
-  icon: typeof ClipboardList;
+  icono: typeof ClipboardList;
 }> = [
   {
     id: "action_plan",
-    title: "Action Plan",
-    description: "Operational steps with urgency, owners, timelines, and cost.",
-    preview: ["Urgency tiers", "Responsible owners", "Cost estimates"],
-    icon: ClipboardList,
+    titulo: "Plan de Acción",
+    descripcion: "Pasos operativos con nivel de urgencia, responsables, plazos y costos.",
+    preview: ["Niveles de urgencia", "Responsables asignados", "Estimación de costos"],
+    icono: ClipboardList,
   },
   {
     id: "nom001_report",
-    title: "NOM-001 Report",
-    description: "Compliance table with legal conclusion for authorities.",
-    preview: ["Parameter vs limit", "Legal conclusion", "PDF-ready"],
-    icon: FileSpreadsheet,
+    titulo: "Informe NOM-001",
+    descripcion: "Tabla de cumplimiento normativo con conclusión legal para autoridades.",
+    preview: ["Parámetros vs límites", "Conclusión legal", "Listo para PDF"],
+    icono: FileSpreadsheet,
   },
   {
     id: "public_fact_sheet",
-    title: "Public Fact Sheet",
-    description: "Visitor-friendly status in clear, non-technical language.",
-    preview: ["QR-ready copy", "Highlights", "Safety label"],
-    icon: FileText,
+    titulo: "Ficha Pública",
+    descripcion: "Resumen en lenguaje claro para visitantes del cenote.",
+    preview: ["Listo para código QR", "Aspectos destacados", "Etiqueta de seguridad"],
+    icono: FileText,
   },
   {
     id: "allies_directory",
-    title: "Allies Directory",
-    description: "NGOs, funds, and treatment partners by issue type.",
-    preview: ["Local partners", "Funding leads", "Contact info"],
-    icon: Users,
+    titulo: "Directorio de Aliados",
+    descripcion: "ONGs, fondos y socios de tratamiento organizados por tipo de problema.",
+    preview: ["Socios locales", "Contactos de financiamiento", "Información de contacto"],
+    icono: Users,
   },
 ];
 
-const formatLabel: Record<FoundryUiType, string> = {
-  action_plan: "Action Plan",
-  nom001_report: "NOM-001 Report",
-  public_fact_sheet: "Public Fact Sheet",
-  allies_directory: "Allies Directory",
+const etiquetaFormato: Record<FoundryUiType, string> = {
+  action_plan: "Plan de Acción",
+  nom001_report: "Informe NOM-001",
+  public_fact_sheet: "Ficha Pública",
+  allies_directory: "Directorio de Aliados",
 };
 
 export default function ExpedientePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-cream text-dark">
-          <div className="flex items-center gap-3 text-primary">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            Loading dossier...
+        <div className="flex min-h-screen items-center justify-center bg-teal-surface text-teal-dark">
+          <div className="flex items-center gap-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-teal-dark border-t-transparent" />
+            Cargando...
           </div>
         </div>
       }
@@ -87,83 +102,125 @@ export default function ExpedientePage() {
 
 function ExpedienteContent() {
   const searchParams = useSearchParams();
-  const [session, setSession] = useState<FoundrySession>(() => loadFoundrySession());
-  const [activeTab, setActiveTab] = useState<FoundryUiType | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationError, setGenerationError] = useState<string | null>(null);
+  const router = useRouter();
+  const dossierId = searchParams.get("id");
 
-  const initialFormat = searchParams.get("format") as FoundryUiType | null;
+  const [lista, setLista] = useState<Dossier[]>([]);
+  const [actual, setActual] = useState<Dossier | null>(null);
+  const [pestanaActiva, setPestanaActiva] = useState<FoundryUiType | null>(null);
+  const [generando, setGenerando] = useState(false);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [nombreEdit, setNombreEdit] = useState("");
 
-  const missingFormats = useMemo(() => {
-    return formats.filter((item) => !session.outputs[item.id]);
-  }, [session.outputs]);
-
-  const availableOutputs = useMemo(() => {
-    return session.order
-      .map((uiType) => session.outputs[uiType])
-      .filter(Boolean) as FoundryUiPayload[];
-  }, [session.order, session.outputs]);
-
-  const refreshSession = () => setSession(loadFoundrySession());
-
-  const handleGenerate = async (uiType: FoundryUiType) => {
-    if (!session.intake || isGenerating) {
-      return;
-    }
-
-    setIsGenerating(true);
-    setGenerationError(null);
-
-    try {
-      const previousOutputs = Object.values(session.outputs).filter(Boolean) as FoundryUiPayload[];
-      const output = await requestFoundryOutput({
-        intake: session.intake,
-        uiType,
-        previousOutputs,
-      });
-      saveFoundryOutput(output);
-      refreshSession();
-      setActiveTab(uiType);
-    } catch (error) {
-      setGenerationError((error as Error).message);
-    } finally {
-      setIsGenerating(false);
+  const refrescar = () => {
+    const todos = getAllDossiers();
+    setLista(todos);
+    if (dossierId) {
+      const d = getDossier(dossierId);
+      setActual(d);
+      if (d && d.session.order.length > 0 && !pestanaActiva) {
+        setPestanaActiva(d.session.order[0]);
+      }
+    } else if (todos.length > 0) {
+      router.replace(`/expediente?id=${todos[0].id}`);
     }
   };
 
   useEffect(() => {
-    if (!session.intake) {
-      return;
-    }
+    refrescar();
+  }, [dossierId]);
 
-    if (initialFormat && !session.outputs[initialFormat]) {
-      void handleGenerate(initialFormat);
-      return;
-    }
+  const sesion = actual?.session ?? null;
 
-    if (!activeTab && session.order.length > 0) {
-      setActiveTab(session.order[0]);
-    }
-  }, [initialFormat, session, activeTab]);
+  const formatosFaltantes = useMemo(() => {
+    if (!sesion) return [];
+    return formatos.filter((f) => !sesion.outputs[f.id]);
+  }, [sesion]);
 
-  if (!session.intake) {
+  const formatosDisponibles = useMemo(() => {
+    if (!sesion) return [];
+    return sesion.order
+      .map((t) => sesion.outputs[t])
+      .filter(Boolean) as FoundryUiPayload[];
+  }, [sesion]);
+
+  const handleGenerar = async (tipo: FoundryUiType) => {
+    if (!actual?.session?.intake || generando) return;
+
+    setGenerando(true);
+    setErrorGeneracion(null);
+
+    try {
+      const previos = Object.values(actual.session.outputs).filter(
+        Boolean
+      ) as FoundryUiPayload[];
+      const resultado = await requestFoundryOutput({
+        intake: actual.session.intake,
+        uiType: tipo,
+        previousOutputs: previos,
+      });
+      updateDossierOutput(actual.id, resultado);
+      refrescar();
+      setPestanaActiva(tipo);
+    } catch (error) {
+      setErrorGeneracion((error as Error).message);
+    } finally {
+      setGenerando(false);
+    }
+  };
+
+  const handleEliminar = (id: string) => {
+    deleteDossier(id);
+    if (id === actual?.id) {
+      router.push("/expediente");
+    } else {
+      refrescar();
+    }
+  };
+
+  const handleRenombrar = (id: string) => {
+    const name = nombreEdit.trim();
+    if (!name) return;
+    renameDossier(id, name);
+    setEditandoId(null);
+    refrescar();
+  };
+
+  const iniciarEdicion = (d: Dossier) => {
+    setEditandoId(d.id);
+    setNombreEdit(d.name);
+  };
+
+  if (!actual || !sesion) {
     return (
-      <div className="flex min-h-screen bg-cream text-dark">
-        <Sidebar />
-        <main className="flex-1 p-8">
-          <div className="mx-auto max-w-2xl pt-16 text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-dark/5">
-              <FileText size={28} className="text-primary" />
+      <div className="flex min-h-screen bg-teal-surface text-teal-dark">
+        <BarraDossier
+          dossiers={lista}
+          actualId={null}
+          editandoId={editandoId}
+          nombreEdit={nombreEdit}
+          onSeleccionar={(id) => router.push(`/expediente?id=${id}`)}
+          onEliminar={handleEliminar}
+          onIniciarEdicion={iniciarEdicion}
+          onNombreEdit={setNombreEdit}
+          onConfirmarRenombrar={handleRenombrar}
+          onCancelarEdicion={() => setEditandoId(null)}
+        />
+        <main className="flex flex-1 items-center justify-center p-8">
+          <div className="max-w-sm text-center">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-light/50">
+              <FileText size={28} className="text-teal-dark" />
             </div>
-            <h1 className="text-2xl font-bold">EMS Dossier</h1>
-            <p className="mt-3 text-dark/60">
-              No intake data found. Start from the intake flow to capture the cenote context.
+            <h1 className="text-2xl font-bold">Expediente Ambiental</h1>
+            <p className="mt-3 text-sm text-teal-dark/60">
+              Aún no tienes expedientes. Crea uno desde el chat de inteligencia ambiental.
             </p>
             <Link
               href="/home"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-dark px-5 py-2.5 text-sm font-medium text-cream transition hover:bg-dark/85"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-teal-dark px-5 py-2.5 text-sm font-medium text-white transition hover:bg-teal-dark/85"
             >
-              Go to Intake <ArrowRight size={14} />
+              Ir al chat <ArrowRight size={14} />
             </Link>
           </div>
         </main>
@@ -172,97 +229,118 @@ function ExpedienteContent() {
   }
 
   return (
-    <div className="flex min-h-screen bg-cream text-dark">
-      <Sidebar />
+    <div className="flex min-h-screen bg-teal-surface text-teal-dark">
+      <BarraDossier
+        dossiers={lista}
+        actualId={actual.id}
+        editandoId={editandoId}
+        nombreEdit={nombreEdit}
+        onSeleccionar={(id) => router.push(`/expediente?id=${id}`)}
+        onEliminar={handleEliminar}
+        onIniciarEdicion={iniciarEdicion}
+        onNombreEdit={setNombreEdit}
+        onConfirmarRenombrar={handleRenombrar}
+        onCancelarEdicion={() => setEditandoId(null)}
+      />
       <main className="flex-1 p-8">
         <header className="flex flex-col gap-3">
-          <div className="text-xs uppercase tracking-[0.25em] text-primary/70">
-            EMS dossier
+          <div className="flex items-center gap-3">
+            <div className="text-xs uppercase tracking-[0.25em] text-teal-primary">
+              Expediente ambiental
+            </div>
+            <span className="rounded-full border border-teal-secondary bg-white px-3 py-0.5 text-xs text-teal-dark/60">
+              {actual.name}
+            </span>
           </div>
-          <h1 className="text-3xl font-bold">Results Workspace</h1>
-          <p className="max-w-2xl text-sm text-dark/60">
-            Each output builds on the same intake data. Generate one format at a time
-            and grow a complete dossier for the cenote.
-          </p>
+          <h1 className="text-3xl font-bold text-teal-dark">{actual.name}</h1>
+          {sesion.intake && (
+            <p className="max-w-2xl text-sm text-teal-dark/50">
+              Consulta: {sesion.intake.usuario_prompt}
+            </p>
+          )}
         </header>
 
-        {generationError ? (
-          <div className="mt-6 flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-700">
+        {errorGeneracion ? (
+          <div className="mt-6 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            {generationError}
+            {errorGeneracion}
           </div>
         ) : null}
 
         <section className="mt-8">
           <div className="flex flex-wrap gap-2">
-            {availableOutputs.length === 0 ? (
-              <span className="text-sm text-dark/50">No outputs yet.</span>
+            {formatosDisponibles.length === 0 ? (
+              <span className="text-sm text-teal-dark/50">
+                Aún no hay reportes generados.
+              </span>
             ) : (
-              availableOutputs.map((output) => (
+              formatosDisponibles.map((output) => (
                 <button
                   key={output.ui_type}
                   type="button"
-                  onClick={() => setActiveTab(output.ui_type)}
+                  onClick={() => setPestanaActiva(output.ui_type)}
                   className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
-                    activeTab === output.ui_type
-                      ? "border-primary/60 bg-primary/10 text-primary"
-                      : "border-dark/15 text-dark/60 hover:border-dark/30"
+                    pestanaActiva === output.ui_type
+                      ? "border-teal-dark bg-teal-dark text-white"
+                      : "border-teal-secondary text-teal-dark/60 hover:border-teal-dark/40"
                   }`}
                 >
-                  {formatLabel[output.ui_type]}
+                  {etiquetaFormato[output.ui_type]}
                 </button>
               ))
             )}
           </div>
 
-          {activeTab ? (
-            <div className="mt-6 rounded-2xl border border-secondary/40 bg-surface p-6">
-              <FormatOutput output={session.outputs[activeTab] ?? null} />
+          {pestanaActiva ? (
+            <div className="mt-6 rounded-2xl border border-teal-light bg-white p-6 shadow-sm">
+              <FormatoVisual output={sesion.outputs[pestanaActiva] ?? null} />
             </div>
           ) : null}
         </section>
 
         <section className="mt-10">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Add another format</h2>
-            <span className="text-xs text-dark/50">
-              {missingFormats.length} remaining
+            <h2 className="text-lg font-semibold text-teal-dark">
+              Generar otro formato
+            </h2>
+            <span className="text-xs text-teal-dark/50">
+              {formatosFaltantes.length} restantes
             </span>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {missingFormats.map((item) => {
-              const Icon = item.icon;
+            {formatosFaltantes.map((f) => {
+              const Icono = f.icono;
               return (
                 <div
-                  key={item.id}
-                  className="rounded-2xl border border-secondary/40 bg-surface p-4"
+                  key={f.id}
+                  className="rounded-2xl border border-teal-light bg-white p-4 transition hover:shadow-sm"
                 >
-                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-dark/5 text-primary">
-                    <Icon size={18} />
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-teal-surface text-teal-primary">
+                    <Icono size={18} />
                   </div>
-                  <h3 className="text-sm font-semibold">{item.title}</h3>
-                  <p className="mt-2 text-xs text-dark/60">{item.description}</p>
-                  <ul className="mt-3 space-y-1 text-xs text-dark/50">
-                    {item.preview.map((line) => (
-                      <li key={line} className="flex items-center gap-1.5">
-                        <span className="h-1 w-1 rounded-full bg-primary" />
-                        {line}
+                  <h3 className="text-sm font-semibold text-teal-dark">{f.titulo}</h3>
+                  <p className="mt-2 text-xs text-teal-dark/60">{f.descripcion}</p>
+                  <ul className="mt-3 space-y-1 text-xs text-teal-dark/50">
+                    {f.preview.map((linea) => (
+                      <li key={linea} className="flex items-center gap-1.5">
+                        <span className="h-1 w-1 rounded-full bg-teal-primary" />
+                        {linea}
                       </li>
                     ))}
                   </ul>
                   <button
                     type="button"
-                    onClick={() => handleGenerate(item.id)}
-                    disabled={isGenerating}
-                    className="mt-4 w-full rounded-full border border-primary/50 bg-primary/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => handleGenerar(f.id)}
+                    disabled={generando}
+                    className="mt-4 w-full rounded-full border border-teal-primary/50 bg-teal-primary/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-teal-dark transition hover:bg-teal-primary/15 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {isGenerating ? (
+                    {generando ? (
                       <span className="inline-flex items-center gap-2">
-                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                        Generating...
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-teal-dark border-t-transparent" />
+                        Generando...
                       </span>
                     ) : (
-                      "Generate"
+                      "Generar"
                     )}
                   </button>
                 </div>
@@ -275,196 +353,508 @@ function ExpedienteContent() {
   );
 }
 
-function FormatOutput({ output }: { output: FoundryUiPayload | null }) {
+function BarraDossier({
+  dossiers,
+  actualId,
+  editandoId,
+  nombreEdit,
+  onSeleccionar,
+  onEliminar,
+  onIniciarEdicion,
+  onNombreEdit,
+  onConfirmarRenombrar,
+  onCancelarEdicion,
+}: {
+  dossiers: Dossier[];
+  actualId: string | null;
+  editandoId: string | null;
+  nombreEdit: string;
+  onSeleccionar: (id: string) => void;
+  onEliminar: (id: string) => void;
+  onIniciarEdicion: (d: Dossier) => void;
+  onNombreEdit: (name: string) => void;
+  onConfirmarRenombrar: (id: string) => void;
+  onCancelarEdicion: () => void;
+}) {
+  return (
+    <aside className="flex w-64 flex-col gap-1 border-r border-teal-light bg-white p-4">
+      <Link
+        href="/"
+        className="mb-4 flex items-center gap-2 text-sm font-semibold text-teal-dark"
+      >
+        <img src="/logo.jpeg" alt="EMS" className="h-7 w-7 rounded-lg object-cover" />
+        EMS
+      </Link>
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs uppercase tracking-[0.2em] text-teal-dark/40">
+          Expedientes
+        </span>
+        <Link
+          href="/home"
+          className="rounded-full p-1 text-teal-dark/40 transition hover:bg-teal-surface hover:text-teal-dark"
+        >
+          <Plus size={16} />
+        </Link>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-1">
+        {dossiers.length === 0 && (
+          <p className="text-xs text-teal-dark/40">Sin expedientes</p>
+        )}
+        {dossiers.map((d) => (
+          <div key={d.id} className="group">
+            {editandoId === d.id ? (
+              <div className="flex items-center gap-1">
+                <input
+                  value={nombreEdit}
+                  onChange={(e) => onNombreEdit(e.target.value)}
+                  className="flex-1 rounded-lg border border-teal-primary bg-teal-surface px-2 py-1.5 text-xs outline-none text-teal-dark"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onConfirmarRenombrar(d.id);
+                    if (e.key === "Escape") onCancelarEdicion();
+                  }}
+                />
+                <button
+                  onClick={() => onConfirmarRenombrar(d.id)}
+                  className="rounded p-1 text-teal-primary transition hover:bg-teal-surface"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  onClick={onCancelarEdicion}
+                  className="rounded p-1 text-teal-dark/40 transition hover:bg-teal-surface"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => onSeleccionar(d.id)}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition ${
+                  d.id === actualId
+                    ? "bg-teal-dark font-medium text-white"
+                    : "text-teal-dark/60 hover:bg-teal-surface hover:text-teal-dark"
+                }`}
+              >
+                <span className="truncate">{d.name}</span>
+                <div
+                  className={`flex items-center gap-0.5 ${
+                    d.id === actualId ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  }`}
+                >
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onIniciarEdicion(d);
+                    }}
+                    className={`rounded p-0.5 transition ${
+                      d.id === actualId
+                        ? "hover:bg-white/20"
+                        : "hover:bg-teal-surface"
+                    }`}
+                  >
+                    <Edit3 size={12} />
+                  </span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`¿Eliminar "${d.name}"?`)) onEliminar(d.id);
+                    }}
+                    className={`rounded p-0.5 transition ${
+                      d.id === actualId
+                        ? "hover:bg-white/20"
+                        : "hover:bg-red-50 hover:text-red-500"
+                    }`}
+                  >
+                    <Trash2 size={12} />
+                  </span>
+                </div>
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+/* ────────────── COMPONENTE DE VISUALIZACIÓN ────────────── */
+
+function FormatoVisual({ output }: { output: FoundryUiPayload | null }) {
   if (!output) {
     return (
-      <p className="text-sm text-dark/60">
-        Select a format to see the generated content.
+      <p className="text-sm text-teal-dark/60">
+        Selecciona un formato para ver su contenido.
       </p>
     );
   }
 
   if (output.ui_type === "action_plan") {
-    return (
-      <section className="space-y-4">
-        <header>
-          <h2 className="text-2xl font-bold text-dark">{output.title}</h2>
-          <p className="mt-2 text-dark/60">{output.summary}</p>
-        </header>
-        <div className="grid gap-4 md:grid-cols-2">
-          {output.actions.map((action, index) => (
+    return <PlanAccion output={output} />;
+  }
+  if (output.ui_type === "nom001_report") {
+    return <InformeNom output={output} />;
+  }
+  if (output.ui_type === "public_fact_sheet") {
+    return <FichaPublica output={output} />;
+  }
+  if (output.ui_type === "allies_directory") {
+    return <DirectorioAliados output={output} />;
+  }
+  return null;
+}
+
+/* ── PLAN DE ACCIÓN ── */
+
+const URGENCIA_CONFIG = {
+  critical: {
+    etiqueta: "Crítico",
+    color: "bg-red-500",
+    bg: "bg-red-50",
+    borde: "border-l-red-500",
+    texto: "text-red-700",
+    icono: Skull,
+  },
+  high: {
+    etiqueta: "Alto",
+    color: "bg-orange-400",
+    bg: "bg-orange-50",
+    borde: "border-l-orange-400",
+    texto: "text-orange-700",
+    icono: AlertTriangle,
+  },
+  medium: {
+    etiqueta: "Medio",
+    color: "bg-yellow-400",
+    bg: "bg-yellow-50",
+    borde: "border-l-yellow-400",
+    texto: "text-yellow-700",
+    icono: Circle,
+  },
+  low: {
+    etiqueta: "Bajo",
+    color: "bg-teal-primary",
+    bg: "bg-teal-surface",
+    borde: "border-l-teal-primary",
+    texto: "text-teal-dark",
+    icono: TrendingDown,
+  },
+};
+
+function PlanAccion({
+  output,
+}: {
+  output: Extract<FoundryUiPayload, { ui_type: "action_plan" }>;
+}) {
+  return (
+    <section className="space-y-6">
+      <header className="border-b border-teal-light pb-4">
+        <h2 className="text-2xl font-bold text-teal-dark">{output.title}</h2>
+        <p className="mt-2 text-sm text-teal-dark/60">{output.summary}</p>
+      </header>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {output.actions.map((accion, idx) => {
+          const cfg = URGENCIA_CONFIG[accion.urgency];
+          const Icono = cfg.icono;
+          return (
             <article
-              key={`${action.action}-${index}`}
-              className="rounded-xl border border-secondary/30 bg-cream/50 p-4"
+              key={`${accion.action}-${idx}`}
+              className={`border-l-4 ${cfg.borde} rounded-r-xl border border-teal-light ${cfg.bg} p-4 transition hover:shadow-sm`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between">
                 <span
-                  className={`inline-block h-2 w-2 rounded-full ${
-                    action.urgency === "critical"
-                      ? "bg-red-500"
-                      : action.urgency === "high"
-                        ? "bg-orange-400"
-                        : action.urgency === "medium"
-                          ? "bg-yellow-400"
-                          : "bg-primary"
-                  }`}
-                />
-                <span className="text-xs uppercase tracking-[0.15em] text-dark/50">
-                  {action.urgency} urgency
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${cfg.color} ${cfg.texto}`}
+                >
+                  <Icono size={14} />
+                  {cfg.etiqueta}
                 </span>
               </div>
-              <h3 className="mt-2 text-base font-semibold">{action.action}</h3>
-              <p className="mt-2 text-sm text-dark/60">
-                Owner: {action.owner} &middot; Deadline: {action.deadline}
-              </p>
-              <p className="mt-1 text-sm text-dark/60">
-                Estimated cost: {action.estimated_cost}
-              </p>
-              {action.notes ? (
-                <p className="mt-2 text-xs text-dark/50">{action.notes}</p>
+              <h3 className="mt-3 text-base font-semibold text-teal-dark">
+                {accion.action}
+              </h3>
+              <div className="mt-3 space-y-1.5 text-sm text-teal-dark/60">
+                <p>
+                  <span className="font-medium text-teal-dark/80">Responsable:</span>{" "}
+                  {accion.owner}
+                </p>
+                <p>
+                  <span className="font-medium text-teal-dark/80">Fecha límite:</span>{" "}
+                  {accion.deadline}
+                </p>
+                <p>
+                  <span className="font-medium text-teal-dark/80">Costo estimado:</span>{" "}
+                  {accion.estimated_cost}
+                </p>
+              </div>
+              {accion.notes ? (
+                <p className="mt-3 text-xs text-teal-dark/50">{accion.notes}</p>
               ) : null}
             </article>
-          ))}
-        </div>
-        <div className="rounded-xl border border-secondary/30 bg-cream/50 p-4">
-          <h3 className="text-sm font-semibold">Next steps</h3>
-          <ul className="mt-3 space-y-2 text-sm text-dark/60">
-            {output.next_steps.map((step, index) => (
-              <li key={`${step}-${index}`} className="flex items-start gap-2">
-                <ArrowRight size={14} className="mt-0.5 shrink-0 text-primary" />
-                {step}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-    );
-  }
+          );
+        })}
+      </div>
 
-  if (output.ui_type === "nom001_report") {
-    return (
-      <section className="space-y-4">
-        <header>
-          <h2 className="text-2xl font-bold text-dark">{output.title}</h2>
-          <p className="mt-2 text-dark/60">{output.summary}</p>
-        </header>
-        <div className="overflow-hidden rounded-xl border border-secondary/30">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-dark/5 text-xs uppercase tracking-[0.2em] text-dark/50">
-              <tr>
-                <th className="px-4 py-3">Parameter</th>
-                <th className="px-4 py-3">Value</th>
-                <th className="px-4 py-3">Limit</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {output.parameters.map((row, index) => (
-                <tr key={`${row.parameter}-${index}`} className="border-t border-secondary/20">
-                  <td className="px-4 py-3 text-dark/80">{row.parameter}</td>
-                  <td className="px-4 py-3 text-dark/60">{row.value}</td>
-                  <td className="px-4 py-3 text-dark/60">{row.limit}</td>
+      {/* Próximos pasos — sección destacada */}
+      <div className="rounded-xl border-2 border-teal-primary/30 bg-gradient-to-r from-teal-surface to-white p-5">
+        <div className="flex items-center gap-2">
+          <ChevronRight size={20} className="text-teal-primary" />
+          <h3 className="text-base font-bold text-teal-dark">Próximos pasos</h3>
+        </div>
+        <ol className="mt-4 space-y-3">
+          {output.next_steps.map((paso, idx) => (
+            <li key={`${paso}-${idx}`} className="flex items-start gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-dark text-xs font-bold text-white">
+                {idx + 1}
+              </span>
+              <span className="pt-0.5 text-sm text-teal-dark/70">{paso}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+/* ── INFORME NOM-001 ── */
+
+const STATUS_CONFIG = {
+  ok: {
+    etiqueta: "Cumple",
+    bg: "bg-green-50",
+    texto: "text-green-700",
+    borde: "border-l-green-500",
+    icono: CheckCircle2,
+  },
+  exceeds: {
+    etiqueta: "Excede",
+    bg: "bg-orange-50",
+    texto: "text-orange-700",
+    borde: "border-l-orange-500",
+    icono: AlertTriangle,
+  },
+  missing: {
+    etiqueta: "Faltante",
+    bg: "bg-red-50",
+    texto: "text-red-700",
+    borde: "border-l-red-500",
+    icono: AlertCircle,
+  },
+};
+
+function InformeNom({
+  output,
+}: {
+  output: Extract<FoundryUiPayload, { ui_type: "nom001_report" }>;
+}) {
+  return (
+    <section className="space-y-6">
+      <header className="border-b border-teal-light pb-4">
+        <h2 className="text-2xl font-bold text-teal-dark">{output.title}</h2>
+        <p className="mt-2 text-sm text-teal-dark/60">{output.summary}</p>
+      </header>
+
+      <div className="overflow-hidden rounded-xl border border-teal-light">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-teal-surface text-xs uppercase tracking-[0.2em] text-teal-dark/60">
+            <tr>
+              <th className="px-4 py-3">Parámetro</th>
+              <th className="px-4 py-3">Valor</th>
+              <th className="px-4 py-3">Límite</th>
+              <th className="px-4 py-3">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {output.parameters.map((row, idx) => {
+              const cfg = STATUS_CONFIG[row.status];
+              const Icono = cfg.icono;
+              return (
+                <tr
+                  key={`${row.parameter}-${idx}`}
+                  className={`border-l-4 ${cfg.borde} border-t border-teal-light ${cfg.bg} transition hover:brightness-95`}
+                >
+                  <td className="px-4 py-3 font-medium text-teal-dark/80">
+                    {row.parameter}
+                  </td>
+                  <td className="px-4 py-3 text-teal-dark/60">{row.value}</td>
+                  <td className="px-4 py-3 text-teal-dark/60">{row.limit}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`inline-flex items-center gap-1 text-xs font-medium ${
-                        row.status === "ok"
-                          ? "text-green-600"
-                          : row.status === "exceeds"
-                            ? "text-orange-600"
-                            : "text-red-600"
-                      }`}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cfg.bg} ${cfg.texto}`}
                     >
-                      {row.status === "ok" ? (
-                        <CheckCircle2 size={12} />
-                      ) : (
-                        <AlertCircle size={12} />
-                      )}
-                      {row.status}
+                      <Icono size={14} />
+                      {cfg.etiqueta}
                     </span>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="rounded-xl border border-secondary/30 bg-cream/50 p-4">
-          <h3 className="text-sm font-semibold">Legal conclusion</h3>
-          <p className="mt-2 text-sm text-dark/60">{output.legal_conclusion}</p>
-          <div className="mt-4">
-            <h4 className="text-xs uppercase tracking-[0.2em] text-dark/50">References</h4>
-            <ul className="mt-2 space-y-1 text-xs text-dark/50">
-              {output.references.map((item, index) => (
-                <li key={`${item}-${index}`} className="flex items-start gap-1.5">
-                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                  {item}
-                </li>
-              ))}
-            </ul>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-xl border border-teal-light bg-teal-surface p-5">
+        <div className="flex items-start gap-3">
+          <Gauge size={20} className="mt-0.5 text-teal-primary" />
+          <div>
+            <h3 className="text-sm font-bold text-teal-dark">Conclusión legal</h3>
+            <p className="mt-2 text-sm text-teal-dark/70">{output.legal_conclusion}</p>
           </div>
         </div>
-      </section>
-    );
-  }
+      </div>
 
-  if (output.ui_type === "public_fact_sheet") {
-    return (
-      <section className="space-y-4">
-        <header>
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-              output.safety_label === "safe"
-                ? "bg-green-100 text-green-700"
-                : output.safety_label === "caution"
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-red-100 text-red-700"
-            }`}
-          >
-            {output.safety_label} status
-          </span>
-          <h2 className="mt-3 text-2xl font-bold text-dark">{output.headline}</h2>
-          <p className="mt-2 text-dark/60">{output.summary}</p>
-        </header>
-        <div className="rounded-xl border border-secondary/30 bg-cream/50 p-4">
-          <h3 className="text-sm font-semibold">Highlights</h3>
-          <ul className="mt-3 space-y-2 text-sm text-dark/60">
-            {output.highlights.map((item, index) => (
-              <li key={`${item}-${index}`} className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                {item}
+      {output.references.length > 0 && (
+        <div className="rounded-xl border border-teal-light bg-white p-4">
+          <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-teal-dark/50">
+            <ExternalLink size={14} />
+            Referencias
+          </h4>
+          <ul className="mt-3 space-y-1.5">
+            {output.references.map((ref, idx) => (
+              <li key={`${ref}-${idx}`} className="flex items-start gap-2 text-xs text-teal-dark/60">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-primary" />
+                {ref}
               </li>
             ))}
           </ul>
         </div>
-      </section>
-    );
-  }
+      )}
+    </section>
+  );
+}
 
-  if (output.ui_type === "allies_directory") {
-    return (
-      <section className="space-y-4">
-        <header>
-          <h2 className="text-2xl font-bold text-dark">{output.title}</h2>
-          <p className="mt-2 text-dark/60">{output.summary}</p>
-        </header>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {output.allies.map((ally, index) => (
-            <article
-              key={`${ally.name}-${index}`}
-              className="rounded-xl border border-secondary/30 bg-cream/50 p-4"
-            >
-              <span className="inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.1em] text-primary">
-                {ally.category}
-              </span>
-              <h3 className="mt-3 text-base font-semibold">{ally.name}</h3>
-              <p className="mt-2 text-sm text-dark/60">Focus: {ally.focus}</p>
-              <p className="mt-1 text-sm text-dark/60">Region: {ally.region}</p>
-              <p className="mt-1 text-sm text-dark/60">Contact: {ally.contact}</p>
-            </article>
-          ))}
+/* ── FICHA PÚBLICA ── */
+
+const SEGURIDAD_CONFIG = {
+  safe: {
+    etiqueta: "Seguro",
+    bg: "bg-green-50",
+    texto: "text-green-700",
+    icono: CheckCircle2,
+  },
+  caution: {
+    etiqueta: "Precaución",
+    bg: "bg-yellow-50",
+    texto: "text-yellow-700",
+    icono: AlertTriangle,
+  },
+  restricted: {
+    etiqueta: "Restringido",
+    bg: "bg-red-50",
+    texto: "text-red-700",
+    icono: Skull,
+  },
+};
+
+function FichaPublica({
+  output,
+}: {
+  output: Extract<FoundryUiPayload, { ui_type: "public_fact_sheet" }>;
+}) {
+  const seg = SEGURIDAD_CONFIG[output.safety_label];
+  const IconoSeg = seg.icono;
+
+  return (
+    <section className="space-y-6">
+      <header className="border-b border-teal-light pb-4">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-bold ${seg.bg} ${seg.texto}`}
+        >
+          <IconoSeg size={18} />
+          {seg.etiqueta}
+        </span>
+        <h2 className="mt-4 text-2xl font-bold text-teal-dark">{output.headline}</h2>
+        <p className="mt-2 text-sm text-teal-dark/60">{output.summary}</p>
+      </header>
+
+      <div className="rounded-xl border border-teal-light bg-teal-surface p-5">
+        <div className="flex items-center gap-2">
+          <Info size={18} className="text-teal-primary" />
+          <h3 className="text-sm font-bold text-teal-dark">Aspectos destacados</h3>
         </div>
-      </section>
-    );
-  }
+        <ul className="mt-4 space-y-3">
+          {output.highlights.map((item, idx) => (
+            <li key={`${item}-${idx}`} className="flex items-start gap-3 text-sm text-teal-dark/70">
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-teal-primary" />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
 
-  return null;
+/* ── DIRECTORIO DE ALIADOS ── */
+
+const CATEGORIA_COLORES: Record<string, { bg: string; texto: string }> = {
+  ngo: { bg: "bg-blue-50", texto: "text-blue-700" },
+  fund: { bg: "bg-green-50", texto: "text-green-700" },
+  treatment: { bg: "bg-purple-50", texto: "text-purple-700" },
+  research: { bg: "bg-cyan-50", texto: "text-cyan-700" },
+  government: { bg: "bg-orange-50", texto: "text-orange-700" },
+  private: { bg: "bg-gray-50", texto: "text-gray-700" },
+};
+
+function DirectorioAliados({
+  output,
+}: {
+  output: Extract<FoundryUiPayload, { ui_type: "allies_directory" }>;
+}) {
+  return (
+    <section className="space-y-6">
+      <header className="border-b border-teal-light pb-4">
+        <h2 className="text-2xl font-bold text-teal-dark">{output.title}</h2>
+        <p className="mt-2 text-sm text-teal-dark/60">{output.summary}</p>
+      </header>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {output.allies.map((aliado, idx) => {
+          const colores = CATEGORIA_COLORES[aliado.category] ?? {
+            bg: "bg-teal-surface",
+            texto: "text-teal-dark",
+          };
+          return (
+            <article
+              key={`${aliado.name}-${idx}`}
+              className="rounded-xl border border-teal-light bg-white p-4 transition hover:border-teal-secondary hover:shadow-sm"
+            >
+              <span
+                className={`inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] ${colores.bg} ${colores.texto}`}
+              >
+                {aliado.category === "ngo"
+                  ? "ONG"
+                  : aliado.category === "fund"
+                    ? "Fondo"
+                    : aliado.category === "treatment"
+                      ? "Tratamiento"
+                      : aliado.category === "research"
+                        ? "Investigación"
+                        : aliado.category === "government"
+                          ? "Gobierno"
+                          : "Privado"}
+              </span>
+              <h3 className="mt-3 text-base font-semibold text-teal-dark">
+                {aliado.name}
+              </h3>
+              <p className="mt-2 text-sm text-teal-dark/60">
+                <span className="font-medium text-teal-dark/80">Enfoque:</span>{" "}
+                {aliado.focus}
+              </p>
+              <p className="mt-1 text-sm text-teal-dark/60">
+                <span className="font-medium text-teal-dark/80">Región:</span>{" "}
+                {aliado.region}
+              </p>
+              <p className="mt-1 text-sm text-teal-dark/60">
+                <span className="font-medium text-teal-dark/80">Contacto:</span>{" "}
+                {aliado.contact}
+              </p>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
 }

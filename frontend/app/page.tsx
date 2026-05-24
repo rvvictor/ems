@@ -1,9 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { CopilotChat } from "@copilotkit/react-ui";
-import "@copilotkit/react-ui/styles.css";
 import {
   TreePine,
   ClipboardList,
@@ -23,41 +21,41 @@ const NAV_ITEMS = [
   { href: "#modelo", label: "Modelo" },
 ];
 
-const FORMATS = [
+const FORMATOS = [
   {
-    icon: ClipboardList,
-    title: "Plan de Acción",
-    description:
-      "Plan operativo con niveles de urgencia, responsables, fechas límite y costos estimados para cada acción correctiva.",
+    icono: ClipboardList,
+    titulo: "Plan de Acción",
+    descripcion:
+      "Pasos operativos con niveles de urgencia, responsables, fechas límite y costos estimados para cada acción correctiva.",
     preview: ["Urgencia: crítica, alta, media, baja", "Responsables asignados", "Costos estimados"],
   },
   {
-    icon: FileSpreadsheet,
-    title: "Informe NOM-001",
-    description:
+    icono: FileSpreadsheet,
+    titulo: "Informe NOM-001",
+    descripcion:
       "Tabla de cumplimiento normativo con parámetros vs límites, conclusión legal y referencias, listo para autoridades.",
     preview: ["Parámetros vs límites", "Conclusión legal", "Formato apto para PDF"],
   },
   {
-    icon: FileText,
-    title: "Ficha Pública",
-    description:
+    icono: FileText,
+    titulo: "Ficha Pública",
+    descripcion:
       "Resumen en lenguaje no técnico para visitantes, con titular, aspectos destacados y etiqueta de seguridad.",
     preview: ["Listo para QR", "Aspectos destacados", "Etiqueta de seguridad"],
   },
   {
-    icon: Users,
-    title: "Directorio de Aliados",
-    description:
+    icono: Users,
+    titulo: "Directorio de Aliados",
+    descripcion:
       "Red de ONGs, fondos y socios de tratamiento organizados por tipo de problema ambiental.",
     preview: ["Socios locales", "Contactos de financiamiento", "Información de contacto"],
   },
 ];
 
-const FOOTER_SECTIONS = [
+const SECCIONES_FOOTER = [
   {
-    title: "Producto",
-    links: [
+    titulo: "Producto",
+    enlaces: [
       { label: "Inicio", href: "/" },
       { label: "Chat IA", href: "#chat" },
       { label: "Funciones", href: "#funciones" },
@@ -65,8 +63,8 @@ const FOOTER_SECTIONS = [
     ],
   },
   {
-    title: "Formatos",
-    links: [
+    titulo: "Formatos",
+    enlaces: [
       { label: "Plan de Acción", href: "/expediente" },
       { label: "Informe NOM-001", href: "/expediente" },
       { label: "Ficha Pública", href: "/expediente" },
@@ -74,8 +72,8 @@ const FOOTER_SECTIONS = [
     ],
   },
   {
-    title: "Tecnología",
-    links: [
+    titulo: "Tecnología",
+    enlaces: [
       { label: "Azure AI Foundry", href: "#modelo" },
       { label: "Next.js", href: "https://nextjs.org" },
       { label: "CopilotKit", href: "https://copilotkit.ai" },
@@ -83,8 +81,8 @@ const FOOTER_SECTIONS = [
     ],
   },
   {
-    title: "Legal",
-    links: [
+    titulo: "Legal",
+    enlaces: [
       { label: "Privacidad", href: "#" },
       { label: "Términos", href: "#" },
       { label: "Contacto", href: "#" },
@@ -106,7 +104,7 @@ function Navbar() {
         <button
           className="flex md:hidden"
           onClick={() => setMenuOpen((prev) => !prev)}
-          aria-label="Toggle menu"
+          aria-label="Abrir menú"
         >
           <ChevronDown size={20} className={`transition ${menuOpen ? "rotate-180" : ""}`} />
         </button>
@@ -162,7 +160,7 @@ function HeroSection() {
     <section className="bg-cream px-6 py-20 md:py-28">
       <div className="mx-auto max-w-4xl text-center">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-primary">
-          Environmental Monitoring System
+          Sistema de Monitoreo Ambiental con IA
         </div>
         <h1 className="text-4xl font-bold leading-tight text-dark md:text-5xl lg:text-6xl">
           Transforma datos de cenotes en{" "}
@@ -178,13 +176,13 @@ function HeroSection() {
             href="#chat"
             className="inline-flex items-center gap-2 rounded-full bg-dark px-6 py-3 text-sm font-medium text-cream transition hover:bg-dark/85"
           >
-            Probar el Chat <ArrowRight size={16} />
+            Probar el chat <ArrowRight size={16} />
           </a>
           <Link
             href="/expediente"
             className="inline-flex items-center gap-2 rounded-full border border-dark/20 bg-white px-6 py-3 text-sm font-medium text-dark transition hover:border-dark/40"
           >
-            Ver Dossier
+            Ver expedientes
           </Link>
         </div>
       </div>
@@ -193,45 +191,22 @@ function HeroSection() {
 }
 
 function ChatSection() {
-  const acceptedFileTypes =
-    ".pdf,.xlsx,.xls,.csv,.json,.xml,.md,text/markdown,application/xml,text/xml,image/*";
-
   return (
     <section id="chat" className="scroll-mt-20 bg-surface px-6 py-20">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-8 text-center">
-          <h2 className="text-2xl font-bold text-dark md:text-3xl">
-            Prueba el asistente
-          </h2>
-          <p className="mt-3 text-dark/60">
-            Describe la situación de tu cenote y adjunta archivos. El asistente
-            preparará los datos al instante.
-          </p>
-        </div>
-
-        <div className="input-only-chat">
-          <CopilotChat
-            instructions={`Eres un experto en impacto ambiental especializado en cenotes.
-Normaliza los datos del usuario al esquema test.json.
-No hagas preguntas, no muestres JSON ni resúmenes en el chat.
-Cuando los datos estén listos, llama a registerIntake con usuario_prompt y datos_zona.`}
-            labels={{
-              title: "Asistente Ambiental",
-              initial:
-                "Describe la situación del cenote y adjunta los archivos de medición.",
-              placeholder: "Describe la situación del cenote...",
-            }}
-            attachments={{
-              enabled: true,
-              accept: acceptedFileTypes,
-              maxSize: 20 * 1024 * 1024,
-            }}
-          />
-        </div>
-
-        <p className="mt-4 text-center text-xs text-dark/40">
-          Los datos se guardan localmente en tu sesión.
+      <div className="mx-auto max-w-lg text-center">
+        <h2 className="text-2xl font-bold text-dark md:text-3xl">
+          Crea tu primer expediente
+        </h2>
+        <p className="mt-3 text-dark/60">
+          Usa el asistente de IA para capturar los datos de tu cenote y generar
+          hasta 4 formatos de reporte ambiental.
         </p>
+        <Link
+          href="/home"
+          className="mt-8 inline-flex items-center gap-2 rounded-full bg-dark px-7 py-3 text-sm font-medium text-cream transition hover:bg-dark/85"
+        >
+          Ir al asistente <ArrowRight size={16} />
+        </Link>
       </div>
     </section>
   );
@@ -252,23 +227,23 @@ function FeaturesSection() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {FORMATS.map((format) => {
-            const Icon = format.icon;
+          {FORMATOS.map((f) => {
+            const Icono = f.icono;
             return (
               <div
-                key={format.title}
+                key={f.titulo}
                 className="group rounded-2xl border border-secondary/40 bg-surface p-6 transition hover:border-primary/40 hover:shadow-sm"
               >
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-dark/5 text-primary">
-                  <Icon size={20} />
+                  <Icono size={20} />
                 </div>
-                <h3 className="text-lg font-semibold text-dark">{format.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-dark/60">{format.description}</p>
+                <h3 className="text-lg font-semibold text-dark">{f.titulo}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-dark/60">{f.descripcion}</p>
                 <ul className="mt-4 space-y-1.5 text-xs text-dark/50">
-                  {format.preview.map((line) => (
-                    <li key={line} className="flex items-center gap-2">
+                  {f.preview.map((linea) => (
+                    <li key={linea} className="flex items-center gap-2">
                       <span className="h-1 w-1 rounded-full bg-primary" />
-                      {line}
+                      {linea}
                     </li>
                   ))}
                 </ul>
@@ -282,7 +257,7 @@ function FeaturesSection() {
             href="/expediente"
             className="inline-flex items-center gap-2 rounded-full bg-dark px-6 py-3 text-sm font-medium text-cream transition hover:bg-dark/85"
           >
-            Ir al Dossier <ArrowRight size={16} />
+            Ir al expediente <ArrowRight size={16} />
           </Link>
         </div>
       </div>
@@ -310,13 +285,13 @@ function ModelSection() {
             </p>
             <ul className="mt-6 space-y-3">
               {[
-                { icon: Shield, text: "Datos procesados en infraestructura empresarial Azure" },
-                { icon: BarChart3, text: "Esquemas JSON tipados para cada formato de salida" },
-                { icon: ScrollText, text: "Normalización automática con valores por defecto" },
-              ].map(({ icon: Icon, text }) => (
-                <li key={text} className="flex items-start gap-3 text-sm text-cream/80">
-                  <Icon size={16} className="mt-0.5 shrink-0 text-cream/60" />
-                  {text}
+                { icono: Shield, texto: "Datos procesados en infraestructura empresarial Azure" },
+                { icono: BarChart3, texto: "Esquemas JSON tipados para cada formato de salida" },
+                { icono: ScrollText, texto: "Normalización automática con valores por defecto" },
+              ].map(({ icono: Icono, texto }) => (
+                <li key={texto} className="flex items-start gap-3 text-sm text-cream/80">
+                  <Icono size={16} className="mt-0.5 shrink-0 text-cream/60" />
+                  {texto}
                 </li>
               ))}
             </ul>
@@ -347,17 +322,17 @@ function FooterSection() {
     <footer className="bg-dark text-cream/60">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
-          {FOOTER_SECTIONS.map((section) => (
-            <div key={section.title}>
-              <h4 className="mb-4 text-sm font-semibold text-cream">{section.title}</h4>
+          {SECCIONES_FOOTER.map((seccion) => (
+            <div key={seccion.titulo}>
+              <h4 className="mb-4 text-sm font-semibold text-cream">{seccion.titulo}</h4>
               <ul className="space-y-2.5">
-                {section.links.map((link) => (
-                  <li key={link.label}>
+                {seccion.enlaces.map((enlace) => (
+                  <li key={enlace.label}>
                     <a
-                      href={link.href}
+                      href={enlace.href}
                       className="text-sm transition hover:text-cream/80"
                     >
-                      {link.label}
+                      {enlace.label}
                     </a>
                   </li>
                 ))}

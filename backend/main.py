@@ -145,7 +145,8 @@ Schema for allies_directory:
 
 Rules:
 - All lists must contain at least one item. If data is missing, add a single fallback item.
-- Use English for all content.
+- Write all descriptive text (titles, summaries, actions, owners, deadlines, next_steps, legal_conclusion, references, headlines, highlights, ally names, focus, region, contact) in Spanish (Latin America).
+- Keep JSON enum values (urgency, status, safety_label, category) in English as specified in the schema — do not translate them.
 - Keep outputs concise and operational.
 - "ui_type" must be "{ui_type}".
 

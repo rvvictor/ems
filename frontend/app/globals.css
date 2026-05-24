@@ -6,6 +6,12 @@
   --color-secondary: #a9c7b5;
   --color-cream: #f6f1e8;
   --color-surface: #ffffff;
+
+  --color-teal-dark: #007872;
+  --color-teal-primary: #419e98;
+  --color-teal-secondary: #82c4be;
+  --color-teal-light: #b8dddc;
+  --color-teal-surface: #edf6f9;
 }
 
 body {

@@ -6,9 +6,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "EMS — Environmental Monitoring System",
+  title: "EMS — Sistema de Monitoreo Ambiental con IA",
   description:
-    "Transforma datos de cenotes en expedientes ambientales completos con inteligencia artificial. Action Plans, informes NOM-001, fichas públicas y directorios de aliados.",
+    "Transforma datos de cenotes en expedientes ambientales completos con inteligencia artificial. Planes de Acción, informes NOM-001, fichas públicas y directorios de aliados.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

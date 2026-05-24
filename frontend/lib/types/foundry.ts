@@ -89,3 +89,15 @@ export interface FoundrySession {
   outputs: Partial<Record<FoundryUiType, FoundryUiPayload>>;
   order: FoundryUiType[];
 }
+
+export interface Dossier {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  session: FoundrySession;
+}
+
+export interface DossierStore {
+  dossiers: Dossier[];
+}
