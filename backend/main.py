@@ -1,9 +1,10 @@
 import os
-from typing import Any
+from typing import Any, Iterator
 
 from dotenv import load_dotenv
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from azure.identity import DefaultAzureCredential
 from azure.ai.projects import AIProjectClient
 
@@ -18,6 +19,19 @@ AGENT_NAME = agent_name
 
 ### FAST API
 app = FastAPI(title="Impacto Ambiental API")
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 ### AZURE OPEN AI
 project = AIProjectClient(
@@ -57,6 +71,25 @@ Datos de entrada:
 {datos_text}
 """
 
+def stream_ai_response(prompt: str) -> Iterator[str]:
+    conversation = openai.conversations.create()
+    response_stream = openai.responses.create(
+        conversation=conversation.id,
+        extra_body={"agent_reference": {"name": AGENT_NAME, "type": "agent_reference"}},
+        input=prompt,
+        timeout=12000,
+        stream=True,
+    )
+
+    for event in response_stream:
+        event_type = getattr(event, "type", None)
+        if event_type == "response.output_text.delta":
+            delta = getattr(event, "delta", "")
+            if delta:
+                yield delta
+        elif event_type == "response.output_text.done":
+            break
+
 @app.post("/datos-zona")
 async def guardar_datos_zona(payload: dict[str, Any] = Body(...)):
     raw_payload = payload.copy()
@@ -94,6 +127,32 @@ async def guardar_datos_zona(payload: dict[str, Any] = Body(...)):
             "prompt": prompt,
             "output": response.output_text,
         },
+    )
+
+@app.post("/datos-zona-stream")
+async def guardar_datos_zona_stream(payload: dict[str, Any] = Body(...)):
+    usuario_prompt = payload.get("usuario_prompt", "")
+    datos_zona = payload.get("datos_zona")
+
+    if usuario_prompt is None or datos_zona is None:
+        raise HTTPException(
+            status_code=400,
+            detail="El JSON debe incluir 'usuario_prompt' y 'datos_zona'.",
+        )
+    if not isinstance(datos_zona, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="'datos_zona' debe ser un objeto JSON con uno o más atributos.",
+        )
+
+    try:
+        prompt = build_prompt(usuario_prompt, datos_zona)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    return StreamingResponse(
+        stream_ai_response(prompt),
+        media_type="text/plain; charset=utf-8",
     )
 
 if __name__ == "__main__":
